@@ -1,35 +1,54 @@
 /*
+   ARREGLOS:
    -Le saque la immpresion de vuelta de la palabra
    -Se agrego el una inhibicion de la escritura de la eeprom
+   -Tiene el oscilador seteado en 1Mhz
+   -Tiene el espacio
+   -No tiene PWM
+   -Tiene un led trasero conectado a la pata RA5.3 que tiene que ir con una r independiente a GND en el lado contrario 
+      a la barra de leds, sirve de referencia para la escritura, el led se enciende mientras se este imprimiendo una palabra,
+      para que imprima correctamente se tiene que centrar la estela amarilla en el trayecto de la mano.
+   -Tiene una nueva funcion que define el tiempo de la palabra, pareciera funcionar bien.
+   
+   PROBLEMAS:
+   -Cuando se enciende en modo escritura y se genera una interrupcion por el sensor infrarojo, empieza a imprimir letras re loco,
+      a pesar que la interrupcion esta inhibida hasta despues de definir el enter.
+   -PAra que sea mas prolijo, podria definirse como corresponde el delay y usar delay_u en vez de delay_ms.
+   -Se podria probar como funciona esta version con un osc de 32 khz.
+   -Siendo muy ambicioso se podria programar unas funciones q midan el tiempo entre una y otra interrupcion, y haciendo alguna 
+      prueba y error, por q no es preciso, se podria hacer q auto configure el tiempo de la palabra. El problema de esto es q lo
+      q va a medri no es muy simetrico y las interrupciones de tiempo se deshabilitan en los delays con lo q estaria perdiendo 
+      informacion. Una solucion es hacer mis propios delays, cosa q ya habia hecho, pero tuvieron algunos problemas.
 */
-#include <16f819.h>                       //pic a utilizar
+#include <16f819.h>                       
 #fuses NOPROTECT
 #fuses NOPUT
 #fuses NOMCLR
 #fuses INTRC_IO
-#use delay (clock=1000000)            //Fosc=1Mhz
+//#fuses NOBROWNOUT
+#use delay (clock=300000)                                                       //Está seteado a menos de 1Mhz porq necesito que  el delay sea mas preciso
 #use fast_io(b) 
-#define cant_letras 40                                                           //antes era 10
-#define tiempo2 3000  
+#define cant_letras 40                                                          //Hasta 39 letras
+#define tiempo2 500  
 #define tiempo3 100
-#bit leds0 = 0x05.0 
-#bit leds1 = 0x06.1 
-#bit leds2 = 0x06.2
-#bit leds3 = 0x06.3
-#bit leds4 = 0x06.4
-#bit leds5 = 0x06.5
-#bit leds6 = 0x06.6
-#bit leds7 = 0x06.7
-#bit in0 = 0x05.1 
-#bit in1 = 0x06.1 
-#bit in2 = 0x06.2
-#bit in3 = 0x06.3
-#bit in4 = 0x06.4
-#bit in5 = 0x06.5
-#bit in6 = 0x06.6
-#bit in7 = 0x06.7
-#bit mode = 0x05.2                                                               //modo de impresion o toma de palabra 1 o 0
-#bit sensor = 0x05.3
+#define antirebote_timer 100                                                    //VAL_TMR0 = 256 - (INT_TMR0 * FREC_OSC * 1/4 * 1/PRESCALER)
+#bit leds0 = 0x05.1 
+#bit leds1 = 0x05.0 
+#bit leds2 = 0x05.7
+#bit leds3 = 0x05.6
+#bit leds4 = 0x06.7
+#bit leds5 = 0x06.6
+#bit leds6 = 0x06.5
+#bit leds7 = 0x06.4
+#bit in0 = 0x06.3 
+#bit in1 = 0x06.6 
+#bit in2 = 0x06.1
+#bit in3 = 0x06.4
+#bit in4 = 0x06.7
+#bit in5 = 0x06.2
+#bit in6 = 0x06.5 
+#bit in7 = 0x05.6
+#bit mode = 0x05.5                                                               //modo de impresion o toma de palabra 0 o 1
 #bit eepromwrite = 0x18c.2                                                       //WREN: EEPROM Write Enable bit | 1 = Allows write cycles | 0 = Inhibits write to the EEPROM
 void output_led(int16 );
 int16 input_teclado(void );
@@ -38,17 +57,13 @@ int a = 0;
 char tecla2 = '\0';
 char tecla = '\0';
 char palabra[41] = {""};                                                         //antes era 20
-int indice_pal;                                                                  //Indice de final de palabra
-int tiempo;                                                                      //Tiempo entre columnas que componen las letras, en milisegundos   
+int indice_pal;
+int tiempo;
 int antirebote(void);
 char teclado(char);
-#inline void graba_palabra(char);                                                //graba la palabra escrita, es inline para evitar que moleste la warning216
+void graba_palabra(char);
 void imp_let(char ,int );
 void busca_letra(char ,char *);
-void output(int16 ,int ,int ,int );                                              //Imprime una letra aplicando un pwm,PARAMETROS:letra,tiempo_total,tiempo1,tiempo0
-#define time1 1                                                                  //Tiempo que dura un "1" del pwm, en milisegundos
-#define time0 5                                                                  //Tiempo que dura un "0" del pwm, en milisegundos
-#define borde_izquierdo 400
 //----------------------------------------------------------------------------------------
 #int_EXT
 void EXT_isr(void)
@@ -56,7 +71,7 @@ void EXT_isr(void)
    #ignore_warnings 216 
    enable_interrupts(INT_EXT);
    i = indice_pal;                                                                        
-   delay_ms(borde_izquierdo);
+   delay_ms(250);                                                               //Hay que subir este delay porq le estoy pasando otro paramentro a la funcion delay_ms 
    #ignore_warnings NONE
 }
 //-----------------------------------------------------------------------------------------
@@ -75,50 +90,17 @@ void TIMER1_isr( )
 //----------------------------------------------------------------------------------------
 void main(void)
 {
-   setup_oscillator(OSC_4MHZ); //set INTRC to prescalef  1MHz 
-   eepromwrite = 0;                                                              //Inhibe la escritura de la eeprom
+   setup_oscillator(OSC_1MHZ);                                                  //set INTRC to prescalef  1MHz 
+   eepromwrite = 0;                                                             //Inhibe la escritura de la eeprom
+   palabra[0] = '\0';                                                           //Sin esto, arrancando en modo escritura se volvia loco 
    do
    {
       if(mode == 0)
       {
-         i = 0;
-         set_tris_b(0b00000001);
-         set_tris_a(0b00001100);
-         port_b_pullups(FALSE); 
-         enable_interrupts(GLOBAL);
-         enable_interrupts(INT_EXT);
-         disable_interrupts(INT_TIMER1);
-         ext_int_edge(L_TO_H);
-         output(0b11111110,tiempo2,time1,time0);
-         output(0b11111101,tiempo2,time1,time0);
-         output(0b11111011,tiempo2,time1,time0);
-         output(0b11110111,tiempo2,time1,time0);
-         output(0b11101111,tiempo2,time1,time0);
-         output(0b11011111,tiempo2,time1,time0);
-         output(0b10111111,tiempo2,time1,time0);
-         output(0b01111111,tiempo2,time1,time0);
-         while(palabra[i] != '\0')
-         {
-            i++;
-         }
-         tiempo = (int) (150/((int)(i * 3)));
-//         tiempo = 10;
-         i = 0;
-         while(mode == 1)
-         {            
-            while(i > 0)
-            {
-               i--;
-               imp_let(palabra[i], 0);
-            }   
-         }
-      }
-      else
-      {
          set_tris_b(0b11111111);
-         set_tris_a(0b00001110);
+         set_tris_a(0b11111111);
          port_b_pullups(TRUE); 
-         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_8 ); 
+         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_2 ); 
          enable_interrupts(GLOBAL); 
          disable_interrupts(INT_TIMER1);
          disable_interrupts(INT_EXT);
@@ -128,11 +110,56 @@ void main(void)
          tecla2 = '\0';
          indice_pal = 0;
          delay_ms(300);
-         while(mode == 1)
+         while(mode == 0)
          {  
             if((tecla = teclado(tecla2)) != 0x0000)
                tecla2 = tecla;
          }      
+      }
+      else
+      {
+         i = 0;
+         set_tris_b(0b00000001);
+         set_tris_a(0b00100000);
+         port_b_pullups(FALSE); 
+         enable_interrupts(GLOBAL);
+         disable_interrupts(INT_EXT);                                            //Deshabilito la interrupcion y la habilito mas tarde para q no me afecte  una interrupcion temprana y se vea todo lento         
+         disable_interrupts(INT_TIMER1);
+         ext_int_edge(H_TO_L);
+         output_led(0b11111110);
+         delay_ms(tiempo2);
+         output_led(0b11111101);
+         delay_ms(tiempo2);
+         output_led(0b11111011);
+         delay_ms(tiempo2);
+         output_led(0b11110111);
+         delay_ms(tiempo2);
+         output_led(0b11101111);
+         delay_ms(tiempo2);
+         output_led(0b11011111);
+         delay_ms(tiempo2);
+         output_led(0b10111111);
+         delay_ms(tiempo2);
+         output_led(0b01111111);
+         delay_ms(tiempo2);
+         while(palabra[i] != '\0')
+         {
+            i++;
+         }
+         tiempo = (int)((int) 23 - (int)(i * 2));
+//         tiempo = (int) (35/((i)));
+         i = 0;
+         enable_interrupts(INT_EXT);
+         while(mode == 1)
+         {            
+            while(i > 0)
+            {
+               i--;
+               imp_let(palabra[i], 0);
+               output_led(0b00000000);
+               output_led(0b00000000);
+            }   
+         }
       }
    }
    while(TRUE);
@@ -147,20 +174,32 @@ void imp_let(char letra ,int mod)
       switch(mod)
       {  
          case 1:
-            output(letra_bin[0],tiempo,time1,time0);
-            output(letra_bin[1],tiempo,time1,time0);
-            output(letra_bin[2],tiempo,time1,time0);
-            output(letra_bin[3],tiempo,time1,time0);
-            output(letra_bin[4],tiempo,time1,time0);
-            output(0b00000000,tiempo,time1,time0);
+            output_led(letra_bin[0]);
+            delay_ms(tiempo);
+            output_led(letra_bin[1]);
+            delay_ms(tiempo);
+            output_led(letra_bin[2]);
+            delay_ms(tiempo);
+            output_led(letra_bin[3]);
+            delay_ms(tiempo);
+            output_led(letra_bin[4]);
+            delay_ms(tiempo);
+            output_led(0b00000000);
+            delay_ms(tiempo);
          break;
          case 0:
-            output(letra_bin[4],tiempo,time1,time0);
-            output(letra_bin[3],tiempo,time1,time0);
-            output(letra_bin[2],tiempo,time1,time0);
-            output(letra_bin[1],tiempo,time1,time0);
-            output(letra_bin[0],tiempo,time1,time0);
-            output(0b00000000,tiempo,time1,time0);
+            output_led(letra_bin[4]);
+            delay_ms(tiempo);
+            output_led(letra_bin[3]);
+            delay_ms(tiempo);
+            output_led(letra_bin[2]);
+            delay_ms(tiempo);
+            output_led(letra_bin[1]);
+            delay_ms(tiempo);
+            output_led(letra_bin[0]);
+            delay_ms(tiempo);
+            output_led(0b00000000);
+            delay_ms(tiempo);
          break;
       }  
    }
@@ -170,12 +209,24 @@ void imp_let(char letra ,int mod)
         switch(mod)
          {  
             case 1:
-               output(0,tiempo,time1,time0);
-               output(0b00000000,tiempo,time1,time0);
+               output_led(0);
+               delay_ms(tiempo);
+               output_led(0);
+               delay_ms(tiempo);
+               output_led(0b00000000);
+               delay_ms(tiempo);
+               output_led(0b00000000);
+               delay_ms(tiempo);
             break;
             case 0:
-               output(0,tiempo,time1,time0);
-               output(0b00000000,tiempo,time1,time0);
+               output_led(0);
+               delay_ms(tiempo);
+               output_led(0);
+               delay_ms(tiempo);
+               output_led(0b00000000);
+               delay_ms(tiempo);
+               output_led(0b00000000);
+               delay_ms(tiempo);
             break;
          }     
       }
@@ -316,7 +367,7 @@ char teclado(char letra)
 {
    switch(antirebote())
    {
-      case 0b11111110:                                                               //A,B,C
+      case 0b11111110:                                                               //A,B,C,espacio
          switch(letra)
          {
             case  'a':
@@ -527,19 +578,6 @@ int antirebote(void)
       }
    }
    return aux;
-}
-//---------------------------------------------------------------------------------------
-void output(int16 letra ,int tiempo_total ,int tiempo1 ,int tiempo0 )
-{
-   int aux = 0;
-   while(aux <= tiempo_total)
-   {
-      output_led(letra);
-      delay_ms(tiempo1);
-      output_led(0b00000000);
-      delay_ms(tiempo0);
-      aux = aux + tiempo1 + tiempo0;
-   }
 }
 
 
