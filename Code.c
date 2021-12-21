@@ -7,12 +7,13 @@
 #fuses NOPUT
 #fuses NOMCLR
 #fuses INTRC_IO
-#use delay (clock=4000000)            //Fosc=1Mhz
+#fuses NOBROWNOUT
+#use delay (clock=300000)            //Fosc=1Mhz
 #use fast_io(b) 
 #define cant_letras 40                                                           //antes era 10
 #define tiempo2 500  
 #define tiempo3 100
-#define antirebote_val 6
+#define antirebote_timer 100                                                       //VAL_TMR0 = 256 - (INT_TMR0 * FREC_OSC * 1/4 * 1/PRESCALER)
 #bit leds0 = 0x05.0 
 #bit leds1 = 0x06.1 
 #bit leds2 = 0x06.2
@@ -56,12 +57,12 @@ void EXT_isr(void)
    delay_ms(100);
    #ignore_warnings NONE
 }
-//----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
 #int_timer1
 void TIMER1_isr( )
 {
    a++;
-   if(a == 4)
+   if(a == 5)
    {
       graba_palabra(tecla2);
       disable_interrupts(INT_TIMER1);
@@ -72,11 +73,11 @@ void TIMER1_isr( )
 //----------------------------------------------------------------------------------------
 void main(void)
 {
-   setup_oscillator(OSC_4MHZ); //set INTRC to prescalef  1MHz 
+   setup_oscillator(OSC_1MHZ); //set INTRC to prescalef  1MHz 
    eepromwrite = 0;                                                              //Inhibe la escritura de la eeprom
    do
    {
-      if(mode == 1)
+      if(mode == 0)
       {
          i = 0;
          set_tris_b(0b00000001);
@@ -106,26 +107,16 @@ void main(void)
          {
             i++;
          }
-         tiempo = (int) (10/((i)));     
+         tiempo = (int) 35 -i;
+//         tiempo = (int) (35/((i)));
          i = 0;
-         while(mode == 1)
+         while(mode == 0)
          {            
             while(i > 0)
             {
                i--;
                imp_let(palabra[i], 0);
-               if(i == 0)
-               {
-                  delay_ms(tiempo);
-                  output_led(0b00000000);
-                  delay_ms(tiempo);
-                  output_led(0b00000000);
-                  delay_ms(tiempo);
-                  output_led(0b00000000);
-                  delay_ms(tiempo);
-                  output_led(0b00000000);
-               }
-            }
+            }   
          }
       }
       else
@@ -133,15 +124,17 @@ void main(void)
          set_tris_b(0b11111111);
          set_tris_a(0b00001110);
          port_b_pullups(TRUE); 
-         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_8 );     
+         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_2 ); 
          enable_interrupts(GLOBAL); 
          disable_interrupts(INT_TIMER1);
          disable_interrupts(INT_EXT);
          set_timer1(0x00);
          palabra[0] = '\0';
+         tecla = '\0';
+         tecla2 = '\0';
          indice_pal = 0;
          delay_ms(300);
-         while(mode == 0)
+         while(mode == 1)
          {  
             if((tecla = teclado(tecla2)) != 0x0000)
                tecla2 = tecla;
@@ -172,8 +165,6 @@ void imp_let(char letra ,int mod)
             delay_ms(tiempo);
             output_led(0b00000000);
             delay_ms(tiempo);
-            output_led(0b00000000);
-            delay_ms(tiempo);
          break;
          case 0:
             output_led(letra_bin[4]);
@@ -185,8 +176,6 @@ void imp_let(char letra ,int mod)
             output_led(letra_bin[1]);
             delay_ms(tiempo);
             output_led(letra_bin[0]);
-            delay_ms(tiempo);
-            output_led(0b00000000);
             delay_ms(tiempo);
             output_led(0b00000000);
             delay_ms(tiempo);
@@ -203,24 +192,12 @@ void imp_let(char letra ,int mod)
                delay_ms(tiempo);
                output_led(0);
                delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
                output_led(0b00000000);
                delay_ms(tiempo);
                output_led(0b00000000);
                delay_ms(tiempo);
             break;
             case 0:
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
                output_led(0);
                delay_ms(tiempo);
                output_led(0);
@@ -381,6 +358,11 @@ char teclado(char letra)
                enable_interrupts(INT_TIMER1);
                set_timer1(0x00);
                return 'c';
+            break;
+            case 'c':
+               enable_interrupts(INT_TIMER1);
+               set_timer1(0x00);
+               return ' ';
             break;
             default :
                if(letra != '\0')
@@ -546,11 +528,6 @@ char teclado(char letra)
                set_timer1(0x00);
                return 'z';
             break;
-            case 'z':
-               enable_interrupts(INT_TIMER1);
-               set_timer1(0x00);
-               return ' ';
-            break;
             default :
                if(letra != '\0')
                  graba_palabra(letra);
@@ -568,18 +545,21 @@ char teclado(char letra)
 //------------------------------------------------------------------------------
 int antirebote(void)
 {
-   char aux;
-   int16 k = 0;
+   int aux;
+   int16 cont;
    aux = input_teclado();
-   while(aux != 0b11111111 && aux == input_teclado())
+   cont = 0;
+   while(cont < 20 && aux != 0b11111111)
    {
-      k++;
+      if(input_teclado() == 0b11111111)
+      {
+         cont ++;
+      }
    }
-   if(k > antirebote_val)
-      return aux;
-   else
-      return 0b11111111;
+   return aux;
 }
+
+
 
 
 
