@@ -49,16 +49,28 @@ void EXT_isr(void)
 {
    #ignore_warnings 216 
    enable_interrupts(INT_EXT);
-   if(sensor == 1)
+   if(sensor == 1 && flag == 1)
    {
       flag = 0;
+      delay_ms(100);
+      while(i > 0)
+      {
+         imp_let(palabra[i], 0);
+         i--;
+      }
       delay_ms(100);
    }
    else
    {
-      if(sensor == 0)
+      if(sensor == 0 && flag == 0)
       {
          flag = 1;
+         delay_ms(100);
+         while(palabra[i] != '\0')
+         {
+             imp_let(palabra[i], 1);
+             i++;
+         }
          delay_ms(100);
       }
    }   
@@ -117,16 +129,6 @@ void main(void)
          i = 0;
          while(mode == 1)
          {
-           while(palabra[i] != '\0' && flag == 0)
-            {
-               imp_let(palabra[i], 1);
-               i++;
-            }
-            while(i > 0 && flag == 1)
-            {
-               imp_let(palabra[i], 0);
-               i--;
-            }
          }
       }
       else
@@ -154,7 +156,7 @@ void main(void)
 //----------------------------------------------------------------------------------------
 void imp_let(char letra ,int mod)
 {
-   int letra_bin[4];
+   int letra_bin[5];
    busca_letra(letra ,letra_bin);
    switch(mod)
    {  
@@ -167,12 +169,16 @@ void imp_let(char letra ,int mod)
          delay_ms(tiempo);
          output_led(letra_bin[3]);
          delay_ms(tiempo);
+         output_led(letra_bin[4]);
+         delay_ms(tiempo);
          output_led(0b00000000);
          delay_ms(tiempo);
          output_led(0b00000000);
          delay_ms(tiempo);
       break;
       case 0:
+         output_led(letra_bin[4]);
+         delay_ms(tiempo);
          output_led(letra_bin[3]);
          delay_ms(tiempo);
          output_led(letra_bin[2]);
@@ -305,10 +311,11 @@ void output_led(int16 led_dec)
 //------------------------------------------------------------------------------
 void busca_letra(char letra ,char *letra_vec)
 {
-   *(letra_vec) = read_eeprom(((letra - 97) * 4));
-   *(letra_vec + 1) = read_eeprom(((letra - 97) * 4) + 1);
-   *(letra_vec + 2) = read_eeprom(((letra - 97) * 4) + 2);
-   *(letra_vec + 3) = read_eeprom(((letra - 97) * 4) + 3);
+   *(letra_vec) =     read_eeprom(((letra - 97) * 5));
+   *(letra_vec + 1) = read_eeprom(((letra - 97) * 5) + 1);
+   *(letra_vec + 2) = read_eeprom(((letra - 97) * 5) + 2);
+   *(letra_vec + 3) = read_eeprom(((letra - 97) * 5) + 3);
+   *(letra_vec + 4) = read_eeprom(((letra - 97) * 5) + 4);
 }
 //-----------------------------------------------------------------------------
 void graba_palabra(char letra)
