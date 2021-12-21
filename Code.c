@@ -7,13 +7,11 @@
 #fuses NOPUT
 #fuses NOMCLR
 #fuses INTRC_IO
-#fuses NOBROWNOUT
-#use delay (clock=300000)            //Fosc=1Mhz
+#use delay (clock=1000000)            //Fosc=1Mhz
 #use fast_io(b) 
 #define cant_letras 40                                                           //antes era 10
-#define tiempo2 500  
+#define tiempo2 600  
 #define tiempo3 100
-#define antirebote_timer 100                                                       //VAL_TMR0 = 256 - (INT_TMR0 * FREC_OSC * 1/4 * 1/PRESCALER)
 #bit leds0 = 0x05.0 
 #bit leds1 = 0x06.1 
 #bit leds2 = 0x06.2
@@ -40,13 +38,17 @@ int a = 0;
 char tecla2 = '\0';
 char tecla = '\0';
 char palabra[41] = {""};                                                         //antes era 20
-int indice_pal;
-int tiempo;
+int indice_pal;                                                                  //Indice de final de palabra
+int tiempo;                                                                      //Tiempo entre columnas que componen las letras, en milisegundos   
 int antirebote(void);
 char teclado(char);
-void graba_palabra(char);
+#inline void graba_palabra(char);                                                //graba la palabra escrita, es inline para evitar que moleste la warning216
 void imp_let(char ,int );
 void busca_letra(char ,char *);
+void output(int16 ,int ,int ,int );                                              //Imprime una letra aplicando un pwm,PARAMETROS:letra,tiempo_total,tiempo1,tiempo0
+#define time1 1                                                                  //Tiempo que dura un "1" del pwm, en milisegundos
+#define time0 5                                                                  //Tiempo que dura un "0" del pwm, en milisegundos
+#define borde_izquierdo 400
 //----------------------------------------------------------------------------------------
 #int_EXT
 void EXT_isr(void)
@@ -54,7 +56,7 @@ void EXT_isr(void)
    #ignore_warnings 216 
    enable_interrupts(INT_EXT);
    i = indice_pal;                                                                        
-   delay_ms(100);
+   delay_ms(borde_izquierdo);
    #ignore_warnings NONE
 }
 //-----------------------------------------------------------------------------------------
@@ -73,11 +75,11 @@ void TIMER1_isr( )
 //----------------------------------------------------------------------------------------
 void main(void)
 {
-   setup_oscillator(OSC_1MHZ); //set INTRC to prescalef  1MHz 
+   setup_oscillator(OSC_4MHZ); //set INTRC to prescalef  1MHz 
    eepromwrite = 0;                                                              //Inhibe la escritura de la eeprom
    do
    {
-      if(mode == 0)
+      if(mode == 1)
       {
          i = 0;
          set_tris_b(0b00000001);
@@ -107,10 +109,10 @@ void main(void)
          {
             i++;
          }
-         tiempo = (int) 35 -i;
-//         tiempo = (int) (35/((i)));
+         tiempo = (int) (150/((int)(i * 3)));
+//         tiempo = 10;
          i = 0;
-         while(mode == 0)
+         while(mode == 1)
          {            
             while(i > 0)
             {
@@ -124,7 +126,7 @@ void main(void)
          set_tris_b(0b11111111);
          set_tris_a(0b00001110);
          port_b_pullups(TRUE); 
-         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_2 ); 
+         setup_timer_1 ( T1_INTERNAL|T1_DIV_BY_8 ); 
          enable_interrupts(GLOBAL); 
          disable_interrupts(INT_TIMER1);
          disable_interrupts(INT_EXT);
@@ -134,7 +136,7 @@ void main(void)
          tecla2 = '\0';
          indice_pal = 0;
          delay_ms(300);
-         while(mode == 1)
+         while(mode == 0)
          {  
             if((tecla = teclado(tecla2)) != 0x0000)
                tecla2 = tecla;
@@ -153,32 +155,20 @@ void imp_let(char letra ,int mod)
       switch(mod)
       {  
          case 1:
-            output_led(letra_bin[0]);
-            delay_ms(tiempo);
-            output_led(letra_bin[1]);
-            delay_ms(tiempo);
-            output_led(letra_bin[2]);
-            delay_ms(tiempo);
-            output_led(letra_bin[3]);
-            delay_ms(tiempo);
-            output_led(letra_bin[4]);
-            delay_ms(tiempo);
-            output_led(0b00000000);
-            delay_ms(tiempo);
+            output(letra_bin[0],tiempo,time1,time0);
+            output(letra_bin[1],tiempo,time1,time0);
+            output(letra_bin[2],tiempo,time1,time0);
+            output(letra_bin[3],tiempo,time1,time0);
+            output(letra_bin[4],tiempo,time1,time0);
+            output(0b00000000,tiempo,time1,time0);
          break;
          case 0:
-            output_led(letra_bin[4]);
-            delay_ms(tiempo);
-            output_led(letra_bin[3]);
-            delay_ms(tiempo);
-            output_led(letra_bin[2]);
-            delay_ms(tiempo);
-            output_led(letra_bin[1]);
-            delay_ms(tiempo);
-            output_led(letra_bin[0]);
-            delay_ms(tiempo);
-            output_led(0b00000000);
-            delay_ms(tiempo);
+            output(letra_bin[4],tiempo,time1,time0);
+            output(letra_bin[3],tiempo,time1,time0);
+            output(letra_bin[2],tiempo,time1,time0);
+            output(letra_bin[1],tiempo,time1,time0);
+            output(letra_bin[0],tiempo,time1,time0);
+            output(0b00000000,tiempo,time1,time0);
          break;
       }  
    }
@@ -188,24 +178,12 @@ void imp_let(char letra ,int mod)
         switch(mod)
          {  
             case 1:
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0b00000000);
-               delay_ms(tiempo);
-               output_led(0b00000000);
-               delay_ms(tiempo);
+               output(0,tiempo,time1,time0);
+               output(0b00000000,tiempo,time1,time0);
             break;
             case 0:
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0);
-               delay_ms(tiempo);
-               output_led(0b00000000);
-               delay_ms(tiempo);
-               output_led(0b00000000);
-               delay_ms(tiempo);
+               output(0,tiempo,time1,time0);
+               output(0b00000000,tiempo,time1,time0);
             break;
          }     
       }
@@ -557,6 +535,19 @@ int antirebote(void)
       }
    }
    return aux;
+}
+//---------------------------------------------------------------------------------------
+void output(int16 letra ,int tiempo_total ,int tiempo1 ,int tiempo0 )
+{
+   int aux = 0;
+   while(aux <= tiempo_total)
+   {
+      output_led(letra);
+      delay_ms(tiempo1);
+      output_led(0b00000000);
+      delay_ms(tiempo0);
+      aux = aux + tiempo1 + tiempo0;
+   }
 }
 
 
