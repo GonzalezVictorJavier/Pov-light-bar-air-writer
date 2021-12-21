@@ -53,11 +53,6 @@ void EXT_isr(void)
    {
       flag = 0;
       delay_ms(100);
-      while(i > 0)
-      {
-         imp_let(palabra[i], 0);
-         i--;
-      }
    }
    else
    {
@@ -65,11 +60,6 @@ void EXT_isr(void)
       {
          flag = 1;
          delay_ms(100);
-         while(palabra[i] != '\0')
-         {
-             imp_let(palabra[i], 1);
-             i++;
-         }
       }
    }   
    #ignore_warnings NONE
@@ -127,6 +117,38 @@ void main(void)
          i = 0;
          while(mode == 1)
          {
+            while(i > 0 && flag == 1)
+            {
+               imp_let(palabra[i], 0);
+               i--;
+               if(i == 0)
+               {
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+               }
+            }            
+            while(palabra[i] != '\0' && flag == 0)
+            {
+               imp_let(palabra[i], 1);
+               i++;
+               if(palabra[i] == '\0')
+               {
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+                  delay_ms(tiempo);
+                  output_led(0b00000000);
+               }
+            }
          }
       }
       else
