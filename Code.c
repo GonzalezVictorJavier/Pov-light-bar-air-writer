@@ -10,7 +10,7 @@
 #use delay (clock=1000000)            //Fosc=1Mhz
 #use fast_io(b) 
 #define cant_letras 40                                                           //antes era 10
-#define tiempo2 600  
+#define tiempo2 3000  
 #define tiempo3 100
 #bit leds0 = 0x05.0 
 #bit leds1 = 0x06.1 
@@ -79,7 +79,7 @@ void main(void)
    eepromwrite = 0;                                                              //Inhibe la escritura de la eeprom
    do
    {
-      if(mode == 1)
+      if(mode == 0)
       {
          i = 0;
          set_tris_b(0b00000001);
@@ -89,22 +89,14 @@ void main(void)
          enable_interrupts(INT_EXT);
          disable_interrupts(INT_TIMER1);
          ext_int_edge(L_TO_H);
-         output_led(0b11111110);
-         delay_ms(tiempo2);
-         output_led(0b11111101);
-         delay_ms(tiempo2);
-         output_led(0b11111011);
-         delay_ms(tiempo2);
-         output_led(0b11110111);
-         delay_ms(tiempo2);
-         output_led(0b11101111);
-         delay_ms(tiempo2);
-         output_led(0b11011111);
-         delay_ms(tiempo2);
-         output_led(0b10111111);
-         delay_ms(tiempo2);
-         output_led(0b01111111);
-         delay_ms(tiempo2);
+         output(0b11111110,tiempo2,time1,time0);
+         output(0b11111101,tiempo2,time1,time0);
+         output(0b11111011,tiempo2,time1,time0);
+         output(0b11110111,tiempo2,time1,time0);
+         output(0b11101111,tiempo2,time1,time0);
+         output(0b11011111,tiempo2,time1,time0);
+         output(0b10111111,tiempo2,time1,time0);
+         output(0b01111111,tiempo2,time1,time0);
          while(palabra[i] != '\0')
          {
             i++;
@@ -136,7 +128,7 @@ void main(void)
          tecla2 = '\0';
          indice_pal = 0;
          delay_ms(300);
-         while(mode == 0)
+         while(mode == 1)
          {  
             if((tecla = teclado(tecla2)) != 0x0000)
                tecla2 = tecla;
