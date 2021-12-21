@@ -49,7 +49,7 @@ void EXT_isr(void)
 {
    #ignore_warnings 216 
    enable_interrupts(INT_EXT);
-   if(sensor == 1 && flag == 1)
+   if(flag == 1)
    {
       flag = 0;
       delay_ms(100);
@@ -58,11 +58,10 @@ void EXT_isr(void)
          imp_let(palabra[i], 0);
          i--;
       }
-      delay_ms(100);
    }
    else
    {
-      if(sensor == 0 && flag == 0)
+      if(flag == 0)
       {
          flag = 1;
          delay_ms(100);
@@ -71,7 +70,6 @@ void EXT_isr(void)
              imp_let(palabra[i], 1);
              i++;
          }
-         delay_ms(100);
       }
    }   
    #ignore_warnings NONE
@@ -104,7 +102,7 @@ void main(void)
          enable_interrupts(GLOBAL);
          enable_interrupts(INT_EXT);
          disable_interrupts(INT_TIMER1);
-         ext_int_edge(H_TO_L);
+         ext_int_edge(L_TO_H);
          output_led(0b11111110);
          delay_ms(tiempo2);
          output_led(0b11111101);
